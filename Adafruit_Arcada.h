@@ -21,12 +21,14 @@ class Adafruit_Arcada_SPITFT;
 #include "Boards/Adafruit_Arcada_Clue.h"
 #include "Boards/Adafruit_Arcada_HalloWingM0.h"
 #include "Boards/Adafruit_Arcada_HalloWingM4.h"
+#include "Boards/Adafruit_Arcada_FeatherM4.h"
 #include "Boards/Adafruit_Arcada_MONSTERM4SK.h"
 #include "Boards/Adafruit_Arcada_PyBadge.h"
 #include "Boards/Adafruit_Arcada_PyGamer.h"
 #include "Boards/Adafruit_Arcada_PyGamerAdvance.h"
 #include "Boards/Adafruit_Arcada_PyPortal.h"
 #include "Boards/Adafruit_Arcada_PyPortalTitano.h"
+#include "Boards/Adafruit_Arcada_RP_Pico.h"
 
 #ifndef ARCADA_SD_CS
 #define ARCADA_SD_CS -1

@@ -19,6 +19,15 @@ static uint8_t *flashAddress = NULL; // Initted on first use below
 
 #endif
 
+#if defined(ARDUINO_ARCH_RP2040)
+extern "C" {
+  #include <hardware/sync.h>
+  #include <hardware/flash.h>
+  static uint32_t flashAddress = 0x80000;
+};
+
+#endif // RP2040
+
 /**************************************************************************/
 /*!
     @brief  Determine amount of unused flash memory remaining.
@@ -50,6 +59,12 @@ uint32_t Adafruit_Arcada_SPITFT::availableFlash(void) {
     }
   }
   return FLASH_SIZE - (uint32_t)flashAddress;
+#elif defined(ARDUINO_ARCH_RP2040)
+  uint8_t partialPage = flashAddress & (FLASH_PAGE_SIZE-1);
+  if (partialPage) {
+    flashAddress += FLASH_PAGE_SIZE - partialPage;
+  }
+  return 0x100000 - flashAddress;
 #else  // !__SAMD51__
   return 0; // unsupported chip
 #endif // __SAMD51__
@@ -194,6 +209,48 @@ uint8_t *Adafruit_Arcada_SPITFT::writeDataToFlash(uint8_t *ramAddress,
 
   // Return value will be start of newly-written data in flash
   uint8_t *returnVal = flashAddress;
+  // Move next flash address past new data
+  // No need to align to next boundary, done at top of next call
+  flashAddress += len;
+  return returnVal;
+#elif defined(ARDUINO_ARCH_RP2040)
+  // availableFlash(), aside from reporting the amount of free flash memory,
+  // also adjusts flashAddress to the first/next available usable boundary.
+  // No need to do that manually here.
+  if (len > availableFlash()) { //FLASH_PAGE_SIZE       
+    Serial.println("Too large!");
+    return NULL;
+  }
+  
+  // Return value will be start of newly-written data in flash
+  uint8_t *returnVal = (uint8_t *)(XIP_BASE + flashAddress);
+
+  uint32_t orig_len = len;
+  // Check if data's already there...if so, most of the work can be skipped.
+  if (memcmp(returnVal, ramAddress, len)) {
+	// Align on page boundary
+	uint8_t partialPage = len % FLASH_PAGE_SIZE;
+	uint32_t pageLen = len + partialPage;
+	uint8_t partialSector = len % FLASH_SECTOR_SIZE;
+	uint32_t sectorLen = len + partialSector;
+	  
+    Serial.printf("Writing %x %x bytes to flash fa %x rv %x\n", orig_len, len, flashAddress, returnVal);
+	Serial.printf("data: %x:%x:%x:%x:%x\n", ramAddress[0], ramAddress[1],ramAddress[2],ramAddress[3],ramAddress[4]);
+	Serial.printf("rval: %x:%x:%x:%x:%x\n", returnVal[0], returnVal[1], returnVal[2], returnVal[3], returnVal[4]);
+  
+	uint32_t ints = save_and_disable_interrupts();
+	flash_range_erase(flashAddress, sectorLen);
+	flash_range_program(flashAddress, ramAddress, pageLen);
+	restore_interrupts (ints);
+
+    if (memcmp(returnVal, ramAddress, len)) { // If mismatch...
+        Serial.println("Flash mismtach proceeding anyway");
+		Serial.printf("rva2: %x:%x:%x:%x:%x\n", returnVal[0], returnVal[1], returnVal[2], returnVal[3], returnVal[4]);
+    }
+  } else {
+    Serial.println("Already in flash");
+  }
+
   // Move next flash address past new data
   // No need to align to next boundary, done at top of next call
   flashAddress += len;
